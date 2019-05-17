@@ -1,23 +1,25 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-import { ModalComponent } from './modal.component';
+import { ModalBackdropComponent } from './modal-backdrop.component';
+import { ModalWindowComponent } from './modal-window.component';
 import { ModalService } from './modal.service';
 
 @NgModule({
   imports: [
     CommonModule
   ],
-  exports: [
-  ],
   declarations: [
-    ModalComponent
+    ModalBackdropComponent,
+    ModalWindowComponent
   ],
   entryComponents: [
-    ModalComponent
+    ModalBackdropComponent,
+    ModalWindowComponent
   ],
   providers: [
     ModalService
   ]
 })
-export class ModalModule { }
+export class ModalModule {
+}
