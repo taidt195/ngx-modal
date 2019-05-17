@@ -1,7 +1,13 @@
-import { Injectable, ComponentRef } from '@angular/core';
-import { ModalComponent } from './modal.component';
+import { ComponentRef } from '@angular/core';
+import { ModalWindowComponent } from './modal-window.component';
+import { ModalBackdropComponent } from './modal-backdrop.component';
+import { Observable, Subject, forkJoin } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 
-declare const jQuery: any;
+export interface ModalResult {
+  action: 'close' | 'dismiss';
+  data?: any;
+}
 
 export class ModalActive {
   close: (result?: any) => void;
@@ -9,45 +15,75 @@ export class ModalActive {
 }
 
 export class ModalRef {
-  private _resolve: (result?: any) => void;
-  private _reject: (reason?: any) => void;
+  private _result: Subject<ModalResult> = new Subject<ModalResult>();
 
-  private modalId: string;
-  public result: Promise<any>;
+  public get result(): Observable<ModalResult> {
+    return this._result.asObservable();
+  };
 
   constructor(
-    private modalComponent: ComponentRef<ModalComponent>,
-    private modalContent: ComponentRef<any>
+    private modalContent: ComponentRef<any>,
+    private modalWindow: ComponentRef<ModalWindowComponent>,
+    private modalBackdrop: ComponentRef<ModalBackdropComponent>
   ) {
-    this.modalId = this.modalComponent.instance.getModalId();
-    this.result = new Promise((resolve, reject) => {
-      this._resolve = resolve;
-      this._reject = reject;
-    });
+    if (modalBackdrop) {
+      modalBackdrop.instance.open();
+    }
+    modalWindow.instance.open();
   }
 
-  contentInstance(): any {
+  public get contentInstance(): any {
     return this.modalContent.instance;
   }
 
-  close(result?: any) {
-    jQuery(`#${this.modalId}`).modal('hide').on('hidden.bs.modal', (e) => {
-      this._resolve(result);
-      this.removeModal();
+  public close(result?: any) {
+    this.closeModalInstances().subscribe(() => {
+      this.returnResult({ action: 'close', data: result });
     });
   }
 
-  dismiss(reason?: any) {
-    jQuery(`#${this.modalId}`).modal('hide').on('hidden.bs.modal', (e) => {
-      this._reject(reason);
-      this.removeModal();
+  public dismiss(reason?: any) {
+    this.closeModalInstances().subscribe(() => {
+      this.returnResult({ action: 'dismiss', data: reason });
     });
   }
 
-  private removeModal() {
-    const componentNative: any = this.modalComponent.location.nativeElement;
-    componentNative.parentNode.removeChild(componentNative);
-    this.modalComponent.destroy();
-    this.modalContent.destroy();
+  private returnResult(result: ModalResult) {
+    this._result.next(result);
+    this._result.complete();
+  }
+
+  private closeModalInstances(): Observable<any> {
+    const { modalWindow, modalBackdrop } = this;
+    const closeInstances: Observable<any>[] = [];
+    if (modalBackdrop && modalBackdrop.instance) {
+      closeInstances.push(modalBackdrop.instance.close());
+    }
+    closeInstances.push(modalWindow.instance.close());
+    return forkJoin(closeInstances).pipe(
+      finalize(() => {
+        this.removeModalInstances();
+      })
+    );
+  }
+
+  private removeModalInstances() {
+    const { modalContent, modalWindow, modalBackdrop } = this;
+    const backdropNative: HTMLElement = modalBackdrop ? modalBackdrop.location.nativeElement : null;
+    const modalNative: HTMLElement = modalWindow.location.nativeElement;
+
+    if (backdropNative && backdropNative.parentNode) {
+      backdropNative.parentNode.removeChild(backdropNative);
+    }
+
+    if (modalNative.parentNode) {
+      modalNative.parentNode.removeChild(modalNative);
+    }
+
+    if (modalBackdrop) {
+      modalBackdrop.destroy();
+    }
+    modalContent.destroy();
+    modalWindow.destroy();
   }
 }
